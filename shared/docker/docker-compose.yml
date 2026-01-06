@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: invoice-postgres
+    environment:
+      POSTGRES_DB: invoices
+      POSTGRES_USER: invoice_user
+      POSTGRES_PASSWORD: secure_password_here
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - invoice-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U invoice_user -d invoices"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (optional, for caching)
+  redis:
+    image: redis:7-alpine
+    container_name: invoice-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - invoice-network
+    command: redis-server --appendonly yes
+
+  # NestJS Backend
+  nestjs-backend:
+    build:
+      context: ../../nestjs-backend
+      dockerfile: Dockerfile
+    container_name: invoice-nestjs
+    environment:
+      DATABASE_URL: postgresql://invoice_user:secure_password_here@postgres:5432/invoices
+      JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
+      JWT_EXPIRES_IN: 1d
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      PYTHON_GRAPHQL_URL: http://python-backend:8001/graphql
+      NODE_ENV: development
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ../../nestjs-backend:/app
+      - /app/node_modules
+    networks:
+      - invoice-network
+    command: npm run start:dev
+
+  # Python Backend
+  python-backend:
+    build:
+      context: ../../python-backend
+      dockerfile: Dockerfile
+    container_name: invoice-python
+    environment:
+      DATABASE_URL: postgresql+asyncpg://invoice_user:secure_password_here@postgres:5432/invoices
+      PYTHON_PORT: 8001
+      PYTHON_ENV: development
+    ports:
+      - "8001:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../../python-backend:/app
+    networks:
+      - invoice-network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+
+  # Adminer (Database Admin)
+  adminer:
+    image: adminer:latest
+    container_name: invoice-adminer
+    ports:
+      - "8080:8080"
+    networks:
+      - invoice-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  invoice-network:
+    driver: bridge

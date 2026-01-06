@@ -1,0 +1,158 @@
+# ------------------------------------------------------
+# THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+# ------------------------------------------------------
+
+type Tenant {
+  id: ID!
+  name: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
+
+type Invoice {
+  id: ID!
+  tenantId: String!
+  vendorId: String
+  invoiceNumber: String
+  amount: String!
+  currency: String!
+  invoiceDate: DateTime
+  dueDate: DateTime
+  description: String
+  status: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type BankTransaction {
+  id: ID!
+  tenantId: String!
+  amount: String!
+  currency: String!
+  transactionDate: DateTime!
+  description: String
+  createdAt: DateTime!
+}
+
+type ScoreBreakdown {
+  exactAmount: Int!
+  dateProximity: Int!
+  textSimilarity: Int!
+  vendorMatch: Int!
+  total: Int!
+}
+
+type ReconciliationCandidate {
+  invoiceId: String!
+  transactionId: String!
+  score: Int!
+  explanation: String!
+  scoreBreakdown: ScoreBreakdown!
+}
+
+type ReconcileResult {
+  candidates: [ReconciliationCandidate!]!
+  processedInvoices: Int!
+  processedTransactions: Int!
+  durationMs: Int!
+}
+
+type ReconcileExplanation {
+  explanation: String!
+  confidence: String!
+  scoreBreakdown: ScoreBreakdown!
+  aiGenerated: Boolean!
+}
+
+type MatchCandidateDto {
+  id: String!
+  tenantId: String!
+  invoiceId: String!
+  bankTransactionId: String!
+  status: MatchStatus!
+  score: Float!
+  explanation: String!
+  createdAt: DateTime!
+  updatedAt: DateTime
+}
+
+enum MatchStatus {
+  PROPOSED
+  CONFIRMED
+  REJECTED
+}
+
+type Query {
+  tenants: [Tenant!]!
+  invoices(tenantId: String!, filters: InvoiceFiltersInput): [Invoice!]!
+  bankTransactions(tenantId: String!): [BankTransaction!]!
+  explainReconciliation(tenantId: String!, invoiceId: String!, transactionId: String!): ReconcileExplanation!
+  matchCandidates(tenantId: String!, filters: MatchStatusInput): [MatchCandidateDto!]!
+}
+
+input InvoiceFiltersInput {
+  status: InvoiceStatus
+  vendorId: String
+}
+
+enum InvoiceStatus {
+  OPEN
+  MATCHED
+  PAID
+  CANCELLED
+}
+
+input MatchStatusInput {
+  status: MatchStatus
+  vendorId: String
+}
+
+type Mutation {
+  createTenant(input: CreateTenantInput!): Tenant!
+  createInvoice(tenantId: String!, input: CreateInvoiceInput!): Invoice!
+  deleteInvoice(tenantId: String!, invoiceId: String!): Boolean!
+  importBankTransactions(tenantId: String!, input: BulkImportTransactionsInput!, idempotencyKey: String!): BankTransaction!
+  reconcile(tenantId: String!): ReconcileResult!
+  confirmMatch(tenantId: String!, matchId: String!): MatchCandidateDto!
+}
+
+input CreateTenantInput {
+  name: String!
+  slug: String!
+}
+
+input CreateInvoiceInput {
+  currency: Currency!
+  vendorId: String!
+  invoiceNumber: String!
+  amount: String!
+  invoiceDate: DateTime
+  dueDate: DateTime
+  description: String
+}
+
+enum Currency {
+  USD
+  EUR
+  GBP
+  CAD
+  AUD
+}
+
+input BulkImportTransactionsInput {
+  transactions: [BankTransactionImportInput!]!
+}
+
+input BankTransactionImportInput {
+  externalId: String!
+  postedAt: DateTime!
+  amount: String!
+  currency: Currency = USD
+  description: String!
+  reference: String
+}
